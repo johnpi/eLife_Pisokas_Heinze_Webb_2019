@@ -1,3 +1,5 @@
+This code is associated with the paper from Pisokas et al., "The head direction circuit of two insect species". eLife, 2020. http://doi.org/10.7554/eLife.53985
+
 # Code used in Pisokas, Heinze, Webb 2019, Biorxiv and Pisokas, Heinze, Webb (2020), eLife. 
 
 This is the code accompanying the Pisokas, Heinze, Webb (2019), Biorxiv and Pisokas, Heinze, Webb (2020), eLife. It uses the code in the directory Kakaria_deBivort_2017/ for running the simulations. The code in Kakaria_deBivort_2017/ is modified version of the code made available by Kakaria and de Bivort, 2017.
