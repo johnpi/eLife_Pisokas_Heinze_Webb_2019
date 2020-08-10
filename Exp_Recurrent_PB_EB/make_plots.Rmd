@@ -1,0 +1,879 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+
+This will load the summariesed medians and standard deviations 
+
+```{r}
+library(R.matlab) # For reading matlab files
+library(ggplot2)  # For graphics
+#library(viridis)
+# For converting the data frames to data tables which are indexable
+library(data.table)
+library(purrr)
+
+tmp <- readMat('/Users/john/Documents/MATLAB/Exp_Recurrent_PB_EB/Data/Stats/results_table_respose_time_and_rate.mat')
+
+SWITCH_PLOT_ON_FILE = FALSE # Set to TRUE to store plots in files. FALSE to display plots inline.
+```
+
+
+This will load all the data for each angular displacement 
+
+```{r}
+# Iteration 60,90,120,150,180,210,240,270
+#data <- readMat('/Users/john/Documents/MATLAB/Exp_Recurrent_PB_EB/Data/Stats/results_table_stats_for_connectivity_matrix_drosophila_mine_case_5_9cols_labels1.mat-uniform-2-90.mat')
+# ...
+
+#data <- readMat('/Users/john/Documents/MATLAB/Exp_Recurrent_PB_EB/Data/Stats/results_table_stats_for_connectivity_matrix_drosophila_mine_case_5_9cols_labels1.mat-uniform-2-' + '90' + '.mat')
+
+#data <- readMat('/Users/john/Documents/MATLAB/Exp_Recurrent_PB_EB/Data/Stats/results_table_stats_for_connectivity_matrix_drosophila_mine_case_5_9cols_labels1.mat-uniform-2-' + '120' + '.mat')
+df <- data.frame(Experiment = character(0),
+                 Angle = numeric(0),
+                 AngleCategory = numeric(0),
+                 TurnDuration = numeric(0),
+                 TurnRate = numeric(0),
+                 TurnRateShortest = numeric(0))
+exps <- c(
+          #"drosophila_mine_case_5_9cols_labels1.mat-uniform-2-",
+          "drosophila_mine_case_5_9cols_labels1-uniform-0.9-3-",
+          # "locust_mine_case_6_with3s_labels_1.mat-gaussian0.4-0.9-3-",
+          "locust_mine_case_6_with3s_labels_1-gaussian0.4-0.9-4-", 
+          #"drosophila_mine_case_5_9cols_localised_3_labels1.mat-gaussian0.4-0.7-3-"
+          "drosophila_mine_case_5_9cols_localised_3_labels1-gaussian0.4-0.7-4-")
+exps_names <- c("Fruit fly", "Locust", "Hybrid-species")
+for (experiment in 1:length(exps_names)) {
+  for (angle in c(90, 120, 150, 180, 210, 240, 270)) {
+    tmp_data <- readMat(paste("/Users/john/Documents/MATLAB/Exp_Recurrent_PB_EB/Data/Stats/results_table_stats_for_connectivity_matrix_", exps[experiment], angle, ".mat", sep=""))
+    N <- NROW(tmp_data$rs.data)
+    tmp <- data.frame(Experiment = rep(exps_names[experiment], N),
+                      Angle = rep(angle, N),
+                      TurnDuration = as.vector(tmp_data$t.data),
+                      TurnRate = as.vector(tmp_data$r.data),
+                      TurnRateShortest = as.vector(tmp_data$rs.data))
+    df <- rbind(df, tmp)
+  }
+}
+
+df$AngleCategory <- as.factor(df$Angle) # Categorical variable for plotting the box plots
+df$TurnDuration <- df$TurnDuration * 1000 # Convert to ms
+
+#data <- readMat('/Users/john/Documents/MATLAB/Exp_Recurrent_PB_EB/Data/Stats/results_table_stats_for_connectivity_matrix_locust_mine_case_6_with3s_labels_1.mat-gaussian0.4-0.9-3-90.mat')
+# ...
+
+#data <- readMat('/Users/john/Documents/MATLAB/Exp_Recurrent_PB_EB/Data/Stats/results_table_stats_for_connectivity_matrix_drosophila_mine_case_5_9cols_localised_3_labels1.mat-gaussian0.4-0.7-3-90.mat')
+# ...
+
+```
+
+Plot a box plot of the Turn Duration data
+
+```{r}
+ggplot(df, aes(x=AngleCategory, y=TurnDuration, fill=Experiment)) + 
+  geom_boxplot() +
+  #scale_fill_brewer(palette = "RdBu") +
+  #scale_fill_brewer(palette = "RdYlBu") + # Pastel2, Spectral, RdYlBu, RdYlGn, Paired, Pastel1, Set2, YlGnBu
+  scale_fill_brewer(palette = "Pastel2") + # Pastel2, Spectral, RdYlBu, RdYlGn, Paired, Pastel1, Set2, YlGnBu
+  #scale_fill_viridis(discrete = TRUE, alpha=0.6) +
+  theme_minimal() +
+  xlab("Angular Change (\u00B0)") +
+  ylab("Change Completion Time (ms)") + 
+  expand_limits(y=c(0, NA)) +
+  theme(legend.position = "top", legend.title=element_blank(), legend.spacing.x = unit(0.5, 'cm')) # Place legend on top and remove its title and increase the space among the legend items
+
+if (SWITCH_PLOT_ON_FILE) {
+  ggsave(filename="Data/Plots/heading_change_time.pdf", width=7, height=4, units="in", dpi=300)
+  ggsave(filename="Data/Plots/heading_change_time.png", width=7, height=4, units="in", dpi=300)
+}
+
+
+```
+
+Plot a box plot of the Turn Rate data
+
+```{r}
+
+ggplot(df, aes(x=AngleCategory, y=TurnRate, fill=Experiment)) + 
+  geom_boxplot() +
+  scale_fill_brewer(palette = "Pastel2") +
+  theme_minimal() +
+  xlab("Angular Change (\u00B0)") +
+  ylab("Rate of Change (\u00B0/s)") + 
+  expand_limits(y=c(0, NA)) +
+  theme(legend.position = "top", legend.title=element_blank(), legend.spacing.x = unit(0.5, 'cm')) # Place legend on top and remove its title and increase the space among the legend items
+
+if (SWITCH_PLOT_ON_FILE) {
+  ggsave(filename="Data/Plots/heading_change_rate.pdf", width=7, height=4, units="in", dpi=300)
+  ggsave(filename="Data/Plots/heading_change_rate.png", width=7, height=4, units="in", dpi=300)
+}
+
+```
+
+Plot a box plot of the Turn Rate data
+
+```{r}
+ggplot(df, aes(x=AngleCategory, y=TurnRateShortest, fill=Experiment)) + 
+  geom_boxplot() +
+  scale_fill_brewer(palette = "Pastel2") + # Pastel2, Spectral, RdYlBu, RdYlGn, Paired, Pastel1, Set2, YlGnBu
+  theme_minimal() +
+  xlab("Angular Change (\u00B0)") +
+  ylab("Rate of Change (\u00B0/s)") + 
+  expand_limits(y=c(0, NA)) +
+  theme(legend.position = "top", legend.title=element_blank(), legend.spacing.x = unit(0.5, 'cm')) # Place legend on top and remove its title and increase the space among the legend items
+
+if (SWITCH_PLOT_ON_FILE) {
+  ggsave(filename="Data/Plots/heading_change_rate_shortest_distance.pdf", width=7, height=4, units="in", dpi=300)
+  ggsave(filename="Data/Plots/heading_change_rate_shortest_distance.png", width=7, height=4, units="in", dpi=300)
+}
+
+```
+
+Plot only the Drosophila measurements
+
+```{r}
+ggplot(df, aes(x=AngleCategory, y=TurnRateShortest, Experiment == exps_names[1])) + 
+  geom_boxplot(fill="#4E84C4") +
+  scale_fill_brewer(palette = "RdYlBu") +
+  theme_minimal() +
+  xlab("Angular Change (\u00B0)") +
+  ylab("Rate of Change (\u00B0/s)") + 
+  expand_limits(y=c(0, NA)) +
+  theme(legend.position = "top", legend.title=element_blank(), legend.spacing.x = unit(0.5, 'cm')) # Place legend on top and remove its title and increase the space among the legend items
+
+if (SWITCH_PLOT_ON_FILE) {
+  ggsave(filename="Data/Plots/heading_change_rate_shortest_distance_dros_only.pdf")
+  ggsave(filename="Data/Plots/heading_change_rate_shortest_distance_dros_only.png")
+}
+```
+
+Plot a violin plot
+
+```{r, fig.height=1.5, fig.width=4}
+library("ggplot2")
+
+ggplot(df, aes(x=AngleCategory, y=TurnRateShortest, fill=Experiment)) + 
+  geom_violin() +
+  scale_fill_brewer(palette = "Pastel2") +
+  theme_minimal() +
+  xlab("Angular Change (\u00B0)") +
+  ylab("Rate of Change (\u00B0/s)")
+
+```
+
+Fit trend lines to the Time Duration data points
+
+```{r}
+ggplot(df, aes(x=Angle, y=TurnDuration, color=Experiment)) + 
+  geom_point() +
+  geom_smooth(method="lm", se=FALSE) + # From https://plot.ly/ggplot2/stat_smooth/
+  #geom_abline() + 
+  #geom_line() + 
+  scale_color_brewer(palette = "Accent") + # Pastel2, Spectral, RdYlBu, RdYlGn, Paired, Pastel1, Set2, YlGnBu
+  theme_minimal() +
+  xlab("Angular Change (\u00B0)") +
+  ylab("Change Completion Time (ms)") + 
+  expand_limits(y=c(0, NA)) +
+  theme(legend.position = "top", legend.title=element_blank(), legend.spacing.x = unit(0.5, 'cm')) # Place legend on top and remove its title and increase the space among the legend items
+
+if (SWITCH_PLOT_ON_FILE) {
+  ggsave(filename="Data/Plots/heading_change_time_trend_lines.pdf")
+  ggsave(filename="Data/Plots/heading_change_time_trend_lines.png")
+}
+
+```
+
+```{r}
+
+f <- function(x,a,b) {a * x + b}
+
+df_table <- data.frame(Experiment = character(0),
+                 a_intercept = numeric(0), # intercept
+                 b_slope = numeric(0)) # slope
+
+dt <- as.data.table(df)
+
+exp1 <- dt[Experiment == exps_names[1]]
+x <- exp1$Angle
+y <- exp1$TurnDuration
+fit <- lm(y ~ x) # Use y = slope*x + intercept for regression
+co <- coef(fit)
+#summary(fit)
+#residuals <- deviance(fit) # redisual sum-of-squares: Returns the residual degrees-of-freedom extracted from a fitted model object.
+print(paste(exps_names[1], "a =", co[[1]], "b =", co[[2]]))
+tmp <- data.frame(Experiment = exps_names[1],
+                  a_intercept = co[[1]],
+                  b_slope = co[[2]])
+df_table <- rbind(df_table, tmp)
+#plot(x, y)
+#abline(fit$coefficients)
+
+exp1 <- dt[Experiment == exps_names[2]]
+x <- exp1$Angle
+y <- exp1$TurnDuration
+fit <- lm(y ~ x) # Use y = slope*x + intercept for regression
+co <- coef(fit)
+#summary(fit)
+#residuals <- deviance(fit) # redisual sum-of-squares: Returns the residual degrees-of-freedom extracted from a fitted model object.
+print(paste(exps_names[2], "a =", co[[1]], "b =", co[[2]]))
+tmp <- data.frame(Experiment = exps_names[2],
+                  a_intercept = co[[1]],
+                  b_slope = co[[2]])
+df_table <- rbind(df_table, tmp)
+#plot(x, y)
+#abline(fit$coefficients)
+
+exp1 <- dt[Experiment == exps_names[3]]
+x <- exp1$Angle
+y <- exp1$TurnDuration
+fit <- lm(y ~ x) # Use y = slope*x + intercept for regression
+co <- coef(fit)
+#summary(fit)
+#residuals <- deviance(fit) # redisual sum-of-squares: Returns the residual degrees-of-freedom extracted from a fitted model object.
+print(paste(exps_names[3], "a =", co[[1]], "b =", co[[2]]))
+tmp <- data.frame(Experiment = exps_names[3],
+                  a_intercept = co[[1]],
+                  b_slope = co[[2]])
+df_table <- rbind(df_table, tmp)
+#plot(x, y)
+#abline(fit$coefficients)
+
+print(df_table)
+
+```
+
+
+Wilcoxon rank-sum test (Mann-Whitney U test)
+
+
+```{r}
+
+dt <- as.data.table(df)
+exp1 <- dt[(Experiment == "Fruit fly (Global inhibition)" | Experiment == "Locust (Local inhibition)") & Angle == 90]
+a_set <- dt[Experiment == "Fruit fly (Global inhibition)" & Angle == 90, TurnRate]
+b_set <- dt[Experiment == "Locust (Local inhibition)" & Angle == 90, TurnRate]
+
+wt <- wilcox.test(x = a_set, 
+            y = b_set)
+
+#res <- dt[, wilcox.test(TurnRate), by = c(Experiment, Angle)]
+
+```
+
+
+Which has the smallest difference between minimum and maximum rate of change? Drosophila or Locust? I would expect Drosophila to have lower variation in rate of change since the activity bump jumps from one state to the other which must be more of instanteneous. However, the results below show that this is not the case. The difference is not too large. The explanation is that the jump is not instanteneous anyway and takes some time.
+```{r}
+dt <- as.data.table(df)
+a_set_max <- 0
+a_set_min <- 10000
+b_set_max <- 0
+b_set_min <- 10000
+for (angle in c(90, 120, 150, 180, 210, 240, 270)) {
+  a_set <- median(dt[Experiment == "Fruit fly (Global inhibition)" & Angle == angle, TurnRateShortest])
+  b_set <- median(dt[Experiment == "Locust (Local inhibition)" & Angle == angle, TurnRateShortest])
+  if (a_set > a_set_max) {a_set_max <- a_set}
+  if (a_set < a_set_min) {a_set_min <- a_set}
+  if (b_set > b_set_max) {b_set_max <- b_set}
+  if (b_set < b_set_min) {b_set_min <- b_set}
+}
+print('Results:')
+print(a_set_max - a_set_min)
+print(b_set_max - b_set_min)
+```
+
+```{r}
+library(data.table)
+library(purrr)
+
+dt <- as.data.table(df)
+group <- levels(dt$Experiment)
+combins <- combn(levels(dt$Experiment), 2) # Make all possible combinations of pairs of the experiments
+params_list <- split(as.vector(combins), rep(1:ncol(combins), each = nrow(combins))) # list the pairs
+
+model_dros <- map(.x = params_list, 
+                .f = ~ wilcox.test(formula = WC ~ group, 
+                                   data    = subset(cb, group %in% .x)))
+
+```
+
+Fit exponential functions (y = a * exp(b * x)) to the data points and plot
+
+```{r}
+
+df2 <- data.frame(Experiment = character(0),
+                 Stimulation = numeric(0),
+                 TurnRate = numeric(0))
+
+tmp_data <- readMat('/Users/john/Documents/MATLAB/Exp_Recurrent_PB_EB/Data/Stats/results_table_imbalanced_stimulation.mat')
+
+tmp_p <- tmp_data$dros.full.normalised.imbalanced.stimulation
+tmp_v <- tmp_data$dros.full.shift.rate
+N <- NCOL(tmp_v)
+tmp <- data.frame(Experiment = rep(exps_names[1], N),
+                  Stimulation = as.vector(tmp_p),
+                  TurnRate = as.vector(tmp_v))
+df2 <- rbind(df2, tmp)
+
+tmp_p <- tmp_data$locust.sin.normalised.imbalanced.stimulation
+tmp_v <- tmp_data$locust.sin.shift.rate
+N <- NCOL(tmp_v)
+tmp <- data.frame(Experiment = rep(exps_names[2], N),
+                  Stimulation = as.vector(tmp_p),
+                  TurnRate = as.vector(tmp_v))
+df2 <- rbind(df2, tmp)
+
+tmp_p <- tmp_data$dros.loc.normalised.imbalanced.stimulation
+tmp_v <- tmp_data$dros.loc.shift.rate
+N <- NCOL(tmp_v)
+tmp <- data.frame(Experiment = rep(exps_names[3], N),
+                  Stimulation = as.vector(tmp_p),
+                  TurnRate = as.vector(tmp_v))
+#df2 <- rbind(df2, tmp)
+
+
+# exponential
+f <- function(x,a,b) {a * exp(b * x)}
+
+ggplot(df2, aes(x=Stimulation, y=TurnRate, colour=Experiment)) +
+  geom_point() +
+  #geom_line()
+  geom_smooth(method="nls", formula=y~a*exp(b*x), se=FALSE, method.args=list(start=list(a=1,b=1))) + # From https://plot.ly/ggplot2/stat_smooth/
+
+  #scale_color_brewer(palette = "RdYlBu") +
+  scale_color_brewer(palette = "Pastel2") + # RdYlBu, Accent, Dark2, Paired, Pastel1, Pastel2, Set1, Set2, YlGnBu
+  theme_minimal() +
+  xlab("Normalised Stimulation Strength") +
+  ylab("Angular Change Rate (columns/s)") + 
+  expand_limits(y=c(0, 10)) +
+  theme(legend.position = "top", legend.title=element_blank(), legend.spacing.x = unit(0.5, 'cm')) # Place legend on top and remove its title and increase the space among the legend items
+
+if (SWITCH_PLOT_ON_FILE) {
+  ggsave(filename="Data/Plots/imbalanced_stimulation_response.pdf", width=7, height=4, units="in", dpi=300)
+  ggsave(filename="Data/Plots/imbalanced_stimulation_response.png", width=7, height=4, units="in", dpi=300)
+}
+
+
+```
+
+
+Fit exponential function (y = a * exp(b * x)) to the data points and print the parameters
+
+```{r}
+
+dt2 <- as.data.table(df2)
+
+# exponential
+f <- function(x,a,b) {a * exp(b * x)}
+
+df_table <- data.frame(Experiment = character(0),
+                 coef_a = numeric(0),
+                 coef_b = numeric(0),
+                 residuals = numeric(0))
+
+exp1 <- dt2[Experiment == exps_names[1]]
+x <- exp1[[2]]
+y <- exp1[[3]]
+
+plot(x, y)
+fit <- nls(y ~ f(x,a,b), start = c(a=1, b=1)) 
+co <- coef(fit)
+residuals <- deviance(fit) # redisual sum-of-squares: Returns the residual degrees-of-freedom extracted from a fitted model object.
+curve(f(x, a=co[1], b=co[2]), add = TRUE, col="green", lwd=2) 
+print(paste(exps_names[1], "a =", co[[1]], "b =", co[[2]], "residuals =", residuals))
+tmp <- data.frame(Experiment = exps_names[1],
+                  coef_a = co[[1]],
+                  coef_b = co[[2]], 
+                  residuals = residuals)
+df_table <- rbind(df_table, tmp)
+
+
+exp1 <- dt2[Experiment == exps_names[2]]
+x <- exp1[[2]]
+y <- exp1[[3]]
+
+plot(x, y)
+fit <- nls(y ~ f(x,a,b), start = c(a=1, b=1)) 
+co <- coef(fit)
+residuals <- deviance(fit)
+curve(f(x, a=co[[1]], b=co[[2]]), add = TRUE, col="green", lwd=2) 
+print(paste(exps_names[2], "a =", co[[1]], "b =", co[[2]], "residuals =", residuals))
+tmp <- data.frame(Experiment = exps_names[2],
+                  coef_a = co[[1]],
+                  coef_b = co[[2]], 
+                  residuals = residuals)
+df_table <- rbind(df_table, tmp)
+
+
+
+#exp1 <- dt2[Experiment == exps_names[3]]
+#x <- exp1[[2]]
+#y <- exp1[[3]]
+
+#plot(x, y)
+#fit <- nls(y ~ f(x,a,b), start = c(a=1, b=1)) 
+#co <- coef(fit)
+#residuals <- deviance(fit)
+#curve(f(x, a=co[1], b=co[2]), add = TRUE, col="green", lwd=2) 
+#print(paste(exps_names[3], "a =", co[[1]], "b =", co[[2]], "residuals =", residuals))
+#tmp <- data.frame(Experiment = exps_names[3],
+#                  coef_a = co[[1]],
+#                  coef_b = co[[2]], 
+#                  residuals = residuals)
+#df_table <- rbind(df_table, tmp)
+
+print(df_table)
+```
+
+
+Plot new imbalanced stimulation bump drift data
+```{r}
+
+df2 <- data.frame(Experiment = character(0),
+                 Stimulation = numeric(0),
+                 TurnRate = numeric(0))
+
+tmp_data <- readMat('/Users/john/Documents/MATLAB/Exp_Recurrent_PB_EB/Data/Stats/results_table_imbalanced_stimulation_new.mat')
+
+tmp_p <- tmp_data$dros.full.normalised.imbalanced.stimulation
+tmp_v <- tmp_data$dros.full.shift.rate
+N <- NCOL(tmp_v)
+tmp <- data.frame(Experiment = rep(exps_names[1], N),
+                  Stimulation = as.vector(tmp_p),
+                  TurnRate = as.vector(tmp_v))
+df2 <- rbind(df2, tmp)
+
+tmp_p <- tmp_data$locust.sin.normalised.imbalanced.stimulation
+tmp_v <- tmp_data$locust.sin.shift.rate
+N <- NCOL(tmp_v)
+tmp <- data.frame(Experiment = rep(exps_names[2], N),
+                  Stimulation = as.vector(tmp_p),
+                  TurnRate = as.vector(tmp_v))
+df2 <- rbind(df2, tmp)
+
+
+# exponential
+f <- function(x,a,b) {a * exp(b * x)}
+
+ggplot(df2, aes(x=Stimulation, y=TurnRate, colour=Experiment)) +
+  geom_point() +
+  #geom_line()
+  geom_smooth(method="nls", formula=y~a*exp(b*x), se=FALSE, method.args=list(start=list(a=1,b=1))) + # From https://plot.ly/ggplot2/stat_smooth/
+
+  #scale_color_brewer(palette = "RdYlBu") +
+  scale_color_brewer(palette = "Pastel2") + # RdYlBu, Accent, Dark2, Paired, Pastel1, Pastel2, Set1, Set2, YlGnBu
+  theme_minimal() +
+  xlab("Normalised Stimulation Strength") +
+  ylab("Angular Change Rate (\u00B0/s)") + 
+  annotate(geom="text", label="0.685*e^{5.454*x}", x=1.25, y=125, parse=TRUE) + 
+  annotate(geom="text", label="0.002*e^{2.911*x}", x=3.5, y=125, parse=TRUE) + 
+  expand_limits(y=c(0, 10)) +
+  theme(legend.position = "top", legend.title=element_blank(), legend.spacing.x = unit(0.5, 'cm')) # Place legend on top and remove its title and increase the space among the legend items
+
+if (SWITCH_PLOT_ON_FILE) {
+  ggsave(filename="Data/Plots/imbalanced_stimulation_response_new.pdf", width=5, height=2.8, units="in", dpi=300)
+  ggsave(filename="Data/Plots/imbalanced_stimulation_response_new.png", width=5, height=2.8, units="in", dpi=300)
+}
+
+```
+
+```{r}
+dt2 <- as.data.table(df2)
+
+# exponential
+f <- function(x,a,b) {a * exp(b * x)}
+
+df_table <- data.frame(Experiment = character(0),
+                 coef_a = numeric(0),
+                 coef_b = numeric(0),
+                 residuals = numeric(0))
+
+exp1 <- dt2[Experiment == exps_names[1]]
+x <- exp1[[2]]
+y <- exp1[[3]]
+
+plot(x, y)
+fit <- nls(y ~ f(x,a,b), start = c(a=1, b=1)) 
+co <- coef(fit)
+residuals <- deviance(fit) # redisual sum-of-squares: Returns the residual degrees-of-freedom extracted from a fitted model object.
+curve(f(x, a=co[1], b=co[2]), add = TRUE, col="green", lwd=2) 
+print(paste(exps_names[1], "a =", co[[1]], "b =", co[[2]], "residuals =", residuals))
+tmp <- data.frame(Experiment = exps_names[1],
+                  coef_a = co[[1]],
+                  coef_b = co[[2]], 
+                  residuals = residuals)
+df_table <- rbind(df_table, tmp)
+
+
+exp1 <- dt2[Experiment == exps_names[2]]
+x <- exp1[[2]]
+y <- exp1[[3]]
+
+plot(x, y)
+fit <- nls(y ~ f(x,a,b), start = c(a=1, b=1)) 
+co <- coef(fit)
+residuals <- deviance(fit)
+curve(f(x, a=co[[1]], b=co[[2]]), add = TRUE, col="green", lwd=2) 
+print(paste(exps_names[2], "a =", co[[1]], "b =", co[[2]], "residuals =", residuals))
+tmp <- data.frame(Experiment = exps_names[2],
+                  coef_a = co[[1]],
+                  coef_b = co[[2]], 
+                  residuals = residuals)
+df_table <- rbind(df_table, tmp)
+
+
+
+#exp1 <- dt2[Experiment == exps_names[3]]
+#x <- exp1[[2]]
+#y <- exp1[[3]]
+
+#plot(x, y)
+#fit <- nls(y ~ f(x,a,b), start = c(a=1, b=1)) 
+#co <- coef(fit)
+#residuals <- deviance(fit)
+#curve(f(x, a=co[1], b=co[2]), add = TRUE, col="green", lwd=2) 
+#print(paste(exps_names[3], "a =", co[[1]], "b =", co[[2]], "residuals =", residuals))
+#tmp <- data.frame(Experiment = exps_names[3],
+#                  coef_a = co[[1]],
+#                  coef_b = co[[2]], 
+#                  residuals = residuals)
+#df_table <- rbind(df_table, tmp)
+
+print(df_table)
+
+```
+
+
+
+Plot stability with and without P-EG neurons
+
+```{r}
+
+tmp_data <- readMat('/Users/john/Documents/MATLAB/Exp_Recurrent_PB_EB/Data/Stats/results_table_with_and_without_P_EG.mat')
+
+df3 <- data.frame(Experiment = character(0),
+                 Weight_Change_Percent = numeric(0),
+                 Successful_Runs_Percent = numeric(0))
+
+exps_names <- c("With P-EG", "Without P-EG")
+
+N <- NROW(tmp_data$dros.with.P.EG.data)
+tmp <- data.frame(Experiment = rep(exps_names[1], N),
+                  Weight_Change_Percent = as.vector(tmp_data$dros.with.P.EG.data[,1]),
+                  Successful_Runs_Percent = as.vector(tmp_data$dros.with.P.EG.data[,2]))
+df3 <- rbind(df3, tmp)
+
+N <- NROW(tmp_data$dros.without.P.EG.data)
+tmp <- data.frame(Experiment = rep(exps_names[2], N),
+                  Weight_Change_Percent = as.vector(tmp_data$dros.without.P.EG.data[,1]),
+                  Successful_Runs_Percent = as.vector(tmp_data$dros.without.P.EG.data[,2]))
+df3 <- rbind(df3, tmp)
+
+df3$Successful_Runs_Percent <- df3$Successful_Runs_Percent * 100 # Convert from 0-1 to 0-100 percent
+
+#ggplot(df3, aes(x=Weight_Change_Percent, y=Successful_Runs_Percent, fill=Experiment)) + 
+#  geom_area(ymin=0, ymax=100)
+  #geom_line()
+
+ggplot() + 
+  geom_area(data=df3[df3$Experiment==exps_names[1],], aes(x=Weight_Change_Percent, y=Successful_Runs_Percent, fill=Experiment), alpha=1) + 
+  geom_area(data=df3[df3$Experiment==exps_names[2],], aes(x=Weight_Change_Percent, y=Successful_Runs_Percent, fill=Experiment), alpha=1) + 
+  
+  scale_fill_brewer(palette = "Purples") + # Paired, YlGnBu, Set1, Set3, Pastel2, Spectral, RdYlBu, RdYlGn, Pastel1, Set2
+  theme_minimal() +
+  #xlab("Portion of P-EN->E-PG Weight Change (%)") +
+  xlab("Synaptic Strength Change (%)") +
+  #ylab("Portion of Instances with Stable Bump (%)") + 
+  ylab("Instances with Stable Heading (%)") + 
+  coord_cartesian(xlim=c(-50, 80)) +
+  theme(legend.position = "top", legend.title=element_blank(), legend.spacing.x = unit(0.5, 'cm')) # Place legend on top and remove its title and increase the space among the legend items
+
+if (SWITCH_PLOT_ON_FILE) {
+  ggsave(filename="Data/Plots/sensitivity-with-without-P-EGs.pdf", width=5, height=2.8, units="in", dpi=300)
+  ggsave(filename="Data/Plots/sensitivity-with-without-P-EGs.png", width=5, height=2.8, units="in", dpi=300)
+}
+
+```
+
+
+```{r}
+tmp_data <- readMat('/Users/john/Documents/MATLAB/Exp_Recurrent_PB_EB/Data/Stats/results_table_with_and_without_P_EG.mat')
+
+df3 <- data.frame(Experiment = character(0),
+                 Weight_Change_Percent = numeric(0),
+                 Successful_Runs_Percent = numeric(0))
+
+exps_names <- c("Locust", "Fruit fly")
+
+N <- NROW(tmp_data$locust.with.P.EG.data)
+tmp <- data.frame(Experiment = rep(exps_names[1], N),
+                  Weight_Change_Percent = as.vector(tmp_data$locust.with.P.EG.data[,1]),
+                  Successful_Runs_Percent = as.vector(tmp_data$locust.with.P.EG.data[,2]))
+df3 <- rbind(df3, tmp)
+
+N <- NROW(tmp_data$dros.with.P.EG.data)
+tmp <- data.frame(Experiment = rep(exps_names[2], N),
+                  Weight_Change_Percent = as.vector(tmp_data$dros.with.P.EG.data[,1]),
+                  Successful_Runs_Percent = as.vector(tmp_data$dros.with.P.EG.data[,2]))
+df3 <- rbind(df3, tmp)
+
+
+df3$Successful_Runs_Percent <- df3$Successful_Runs_Percent * 100 # Convert from 0-1 to 0-100 percent
+
+#ggplot(df3, aes(x=Weight_Change_Percent, y=Successful_Runs_Percent, fill=Experiment)) + 
+#  geom_area(ymin=0, ymax=100)
+  #geom_line()
+
+ggplot() + 
+  geom_area(data=df3[df3$Experiment==exps_names[1],], aes(x=Weight_Change_Percent, y=Successful_Runs_Percent, fill=Experiment), alpha=1) + 
+  geom_area(data=df3[df3$Experiment==exps_names[2],], aes(x=Weight_Change_Percent, y=Successful_Runs_Percent, fill=Experiment), alpha=1) + 
+  
+  scale_fill_brewer(palette = "Purples", direction=-1) + # Paired, YlGnBu, Set1, Set3, Pastel2, Spectral, RdYlBu, RdYlGn, Pastel1, Set2
+  theme_minimal() +
+  #xlab("Portion of P-EN->E-PG Weight Change (%)") +
+  xlab("Synaptic Strength Change (%)") +
+  #ylab("Portion of Instances with Stable Bump (%)") + 
+  ylab("Instances with Stable Heading (%)") + 
+  coord_cartesian(xlim=c(-100, 100)) +
+  theme(legend.position = "top", legend.title=element_blank(), legend.spacing.x = unit(0.5, 'cm')) # Place legend on top and remove its title and increase the space among the legend items
+
+if (SWITCH_PLOT_ON_FILE) {
+  ggsave(filename="Data/Plots/sensitivity-dros-vs-locust-with-P-EGs.pdf", width=5, height=2.8, units="in", dpi=300)
+  ggsave(filename="Data/Plots/sensitivity-dros-vs-locust-with-P-EGs.png", width=5, height=2.8, units="in", dpi=300)
+}
+
+```
+
+
+```{r}
+tmp_data <- readMat('/Users/john/Documents/MATLAB/Exp_Recurrent_PB_EB/Data/Stats/results_table_with_and_without_P_EG.mat')
+
+df3 <- data.frame(Experiment = character(0),
+                 Weight_Change_Percent = numeric(0),
+                 Successful_Runs_Percent = numeric(0))
+
+exps_names <- c("Locust", "Hybrid-species")
+
+N <- NROW(tmp_data$locust.with.P.EG.data)
+tmp <- data.frame(Experiment = rep(exps_names[1], N),
+                  Weight_Change_Percent = as.vector(tmp_data$locust.with.P.EG.data[,1]),
+                  Successful_Runs_Percent = as.vector(tmp_data$locust.with.P.EG.data[,2]))
+df3 <- rbind(df3, tmp)
+
+N <- NROW(tmp_data$mixed.dros.with.P.EG.data)
+tmp <- data.frame(Experiment = rep(exps_names[2], N),
+                  Weight_Change_Percent = as.vector(tmp_data$mixed.dros.with.P.EG.data[,1]),
+                  Successful_Runs_Percent = as.vector(tmp_data$mixed.dros.with.P.EG.data[,2]))
+df3 <- rbind(df3, tmp)
+
+
+df3$Successful_Runs_Percent <- df3$Successful_Runs_Percent * 100 # Convert from 0-1 to 0-100 percent
+
+#ggplot(df3, aes(x=Weight_Change_Percent, y=Successful_Runs_Percent, fill=Experiment)) + 
+#  geom_area(ymin=0, ymax=100)
+  #geom_line()
+
+ggplot() + 
+  geom_area(data=df3[df3$Experiment==exps_names[1],], aes(x=Weight_Change_Percent, y=Successful_Runs_Percent, fill=Experiment), alpha=1) + 
+  geom_area(data=df3[df3$Experiment==exps_names[2],], aes(x=Weight_Change_Percent, y=Successful_Runs_Percent, fill=Experiment), alpha=1) + 
+  
+  scale_fill_brewer(palette = "Purples", direction=-1) + # Paired, YlGnBu, Set1, Set3, Pastel2, Spectral, RdYlBu, RdYlGn, Pastel1, Set2
+  theme_minimal() +
+  #xlab("Portion of P-EN->E-PG Weight Change (%)") +
+  xlab("Synaptic Strength Change (%)") +
+  #ylab("Portion of Instances with Stable Bump (%)") + 
+  ylab("Instances with Stable Heading (%)") + 
+  coord_cartesian(xlim=c(-100, 100)) +
+  theme(legend.position = "top", legend.title=element_blank(), legend.spacing.x = unit(0.5, 'cm')) # Place legend on top and remove its title and increase the space among the legend items
+
+if (SWITCH_PLOT_ON_FILE) {
+  ggsave(filename="Data/Plots/sensitivity-with-vs-without-P-EN-to-E-PG-loop.pdf", width=5, height=2.8, units="in", dpi=300)
+  ggsave(filename="Data/Plots/sensitivity-with-vs-without-P-EN-to-E-PG-loop.png", width=5, height=2.8, units="in", dpi=300)
+}
+
+```
+
+
+```{r}
+tmp_data <- readMat('/Users/john/Documents/MATLAB/Exp_Recurrent_PB_EB/Data/Stats/results_table_with_and_without_P_EG.mat')
+
+df3 <- data.frame(Experiment = character(0),
+                 Weight_Change_Percent = numeric(0),
+                 Successful_Runs_Percent = numeric(0))
+
+exps_names <- c("Fruit fly", "Hybrid-species")
+
+N <- NROW(tmp_data$dros.with.P.EG.data)
+tmp <- data.frame(Experiment = rep(exps_names[1], N),
+                  Weight_Change_Percent = as.vector(tmp_data$dros.with.P.EG.data[,1]),
+                  Successful_Runs_Percent = as.vector(tmp_data$dros.with.P.EG.data[,2]))
+df3 <- rbind(df3, tmp)
+
+N <- NROW(tmp_data$mixed.dros.with.P.EG.data)
+tmp <- data.frame(Experiment = rep(exps_names[2], N),
+                  Weight_Change_Percent = as.vector(tmp_data$mixed.dros.with.P.EG.data[,1]),
+                  Successful_Runs_Percent = as.vector(tmp_data$mixed.dros.with.P.EG.data[,2]))
+df3 <- rbind(df3, tmp)
+
+
+df3$Successful_Runs_Percent <- df3$Successful_Runs_Percent * 100 # Convert from 0-1 to 0-100 percent
+
+#ggplot(df3, aes(x=Weight_Change_Percent, y=Successful_Runs_Percent, fill=Experiment)) + 
+#  geom_area(ymin=0, ymax=100)
+  #geom_line()
+
+ggplot() + 
+  geom_area(data=df3[df3$Experiment==exps_names[1],], aes(x=Weight_Change_Percent, y=Successful_Runs_Percent, fill=Experiment), alpha=0.5) + 
+  geom_area(data=df3[df3$Experiment==exps_names[2],], aes(x=Weight_Change_Percent, y=Successful_Runs_Percent, fill=Experiment), alpha=0.5) + 
+  
+  scale_fill_brewer(palette = "Purples") + # Paired, YlGnBu, Set1, Set3, Pastel2, Spectral, RdYlBu, RdYlGn, Pastel1, Set2
+  theme_minimal() +
+  #xlab("Portion of P-EN->E-PG Weight Change (%)") +
+  xlab("Synaptic Strength Change (%)") +
+  #ylab("Portion of Instances with Stable Bump (%)") + 
+  ylab("Instances with Stable Heading (%)") + 
+  coord_cartesian(xlim=c(-100, 100)) +
+  theme(legend.position = "top", legend.title=element_blank(), legend.spacing.x = unit(0.5, 'cm')) # Place legend on top and remove its title and increase the space among the legend items
+
+if (SWITCH_PLOT_ON_FILE) {
+  ggsave(filename="Data/Plots/sensitivity-fruit-fly-vs-mixed-species-with-P-EG.pdf", width=7, height=4, units="in", dpi=300)
+  ggsave(filename="Data/Plots/sensitivity-fruit-fly-vs-mixed-species-with-P-EG.png", width=7, height=4, units="in", dpi=300)
+}
+```
+
+
+Spiking activity of neurons accross the PB
+
+```{r}
+
+# Function packaging the data for plotting
+package_data_for_plotting <- function(neuron_names, PB_GlomeruliIdx, activity_P_EN, activity_P_EG, activity_E_PG) {
+  df_animal <- data.frame(NeuronType=character(0), 
+                            PB_Glomeruli=numeric(0),
+                            Activity=numeric(0))
+
+  N <- NROW(PB_GlomeruliIdx)
+  neuron_type_num <- 1
+  tmp <- data.frame(NeuronType = rep(neuron_names[neuron_type_num], N),
+                    PB_Glomeruli = as.vector(PB_GlomeruliIdx),
+                    Activity = as.vector(activity_P_EN))
+  df_animal <- rbind(df_animal, tmp)
+  neuron_type_num <- 2
+  tmp <- data.frame(NeuronType = rep(neuron_names[neuron_type_num], N),
+                    PB_Glomeruli = as.vector(PB_GlomeruliIdx),
+                    Activity = as.vector(activity_P_EG))
+  df_animal <- rbind(df_animal, tmp)
+  neuron_type_num <- 3
+  tmp <- data.frame(NeuronType = rep(neuron_names[neuron_type_num], N),
+                    PB_Glomeruli = as.vector(PB_GlomeruliIdx),
+                    Activity = as.vector(activity_E_PG))
+  df_animal <- rbind(df_animal, tmp)
+
+  return(df_animal)
+}
+
+# Function for plotting the neural activity
+plot_faceted_activity <- function(df_animal, PB_GlomeruliIdx) {
+  N <- NROW(PB_GlomeruliIdx)
+
+  ggplot(data=df_animal, aes(x=PB_Glomeruli, y=Activity, fill=NeuronType)) + 
+    geom_bar(stat="identity") + 
+    #geom_line() + 
+    #geom_area(alpha=1) +
+    facet_grid(NeuronType ~ .) +
+  
+    scale_fill_brewer(palette = "YlGnBu") + # Paired, YlGnBu, Set1, Set3, Pastel2, Spectral, RdYlBu, RdYlGn, Pastel1, Set2
+    theme_minimal() +
+    #scale_x_continuous(breaks=seq(1, N, 1)) + 
+    scale_x_continuous(breaks=seq(1, N, 1), labels=c(1:as.integer(N/2), 1:as.integer(N/2))) + 
+    #coord_cartesian(xlim=c(1, N)) +
+    xlab("PB Glomeruli Index") +
+    ylab("Neuron Firing Rate (impulses/s)") + 
+    #coord_cartesian(xlim=c(-50, 80)) +
+    theme(legend.position = "bottom", 
+          legend.title=element_blank(), 
+          legend.spacing.x = unit(0.5, 'cm'),
+          #panel.grid.minor = element_blank(), 
+          panel.grid.major = element_blank()
+          ) # Place legend on top and remove its title and increase the space among the legend items
+}
+```
+
+
+This is the plot for the Drosophila activity
+```{r}
+neuron_names <- c("P-EN", "P-EG", "E-PG", "D7")
+
+PB_GlomeruliIdx = c(1:18)
+drosophila_P_EN_activity = c(0, 0, 0, 0, 170, 190, 160, 0, 0, 0, 0, 0, 0, 160, 190, 150, 0, 0)
+drosophila_P_EG_activity = c(0, 0, 0, 0, 170, 190, 160, 0, 0, 0, 0, 0, 0, 160, 190, 150, 0, 0)
+drosophila_E_PG_activity = c(10, 10, 10, 70, 140, 150, 130, 70, 0, 0, 0, 0, 70, 130, 150, 120, 60, 10)
+drosophila_D7_activity   = c(240, 240, 240, 240, 220, 200, 200, 220)
+
+
+df_drosophila <- package_data_for_plotting(neuron_names, PB_GlomeruliIdx, drosophila_P_EN_activity, drosophila_P_EG_activity, drosophila_E_PG_activity)
+
+plot_faceted_activity(df_drosophila, PB_GlomeruliIdx)
+
+if (SWITCH_PLOT_ON_FILE) {
+  ggsave(filename="Data/Plots/columnar_neural_activity_drosophila.pdf", width=7, height=4, units="in", dpi=300)
+  ggsave(filename="Data/Plots/columnar_neural_activity_drosophila.png", width=7, height=4, units="in", dpi=300)
+}
+
+  
+```
+
+
+This is a plot for Locust activity (sigma^2=0.4)
+```{r}
+# sigma^2=0.4
+PB_GlomeruliIdx = c(1:16)
+locust_P_EN_activity = c(0, 0, 0, 160, 230, 230, 0, 0, 0, 0, 0, 0, 220, 220, 150, 0)
+locust_P_EG_activity = c(0, 0, 0, 160, 230, 230, 0, 0, 0, 0, 0, 0, 220, 220, 150, 0)
+locust_E_PG_activity = c(10, 0, 0, 220, 220, 220, 0, 0, 0, 0, 10, 0, 220, 230, 210, 0)
+locust_D7_activity   = c(270, 260, 250, 170, 0, 0, 170, 250)
+
+df3_locust <- package_data_for_plotting(neuron_names, PB_GlomeruliIdx, locust_P_EN_activity, locust_P_EG_activity, locust_E_PG_activity)
+
+plot_faceted_activity(df3_locust, PB_GlomeruliIdx)
+
+if (SWITCH_PLOT_ON_FILE) {
+  ggsave(filename="Data/Plots/columnar_neural_activity_locust.pdf", width=7, height=4, units="in", dpi=300)
+  ggsave(filename="Data/Plots/columnar_neural_activity_locust.png", width=7, height=4, units="in", dpi=300)
+}
+
+```
+
+
+This is the plot that I will use in the paper for the Locust activity (sigma^2=0.35)
+
+```{r}
+# sigma^2=0.35
+PB_GlomeruliIdx = c(1:16)
+locust_P_EN_activity = c(0, 0, 0, 130, 120, 100, 0, 0, 0, 0, 0, 100, 120, 130, 0, 0)
+locust_P_EG_activity = c(0, 0, 0, 130, 120, 100, 0, 0, 0, 0, 0, 100, 120, 130, 0, 0)
+locust_E_PG_activity = c(0, 10, 150, 210, 210, 160, 0, 0, 10, 0, 0, 150, 210, 210, 160, 0)
+locust_D7_activity   = c(260, 260, 230, 0, 0, 0, 230, 260)
+
+df3_locust <- package_data_for_plotting(neuron_names, PB_GlomeruliIdx, locust_P_EN_activity, locust_P_EG_activity, locust_E_PG_activity)
+
+plot_faceted_activity(df3_locust, PB_GlomeruliIdx)
+
+if (SWITCH_PLOT_ON_FILE) {
+  ggsave(filename="Data/Plots/columnar_neural_activity_locust.pdf", width=7, height=4, units="in", dpi=300)
+  ggsave(filename="Data/Plots/columnar_neural_activity_locust.png", width=7, height=4, units="in", dpi=300)
+}
+
+```
+
+
