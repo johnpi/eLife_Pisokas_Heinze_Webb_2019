@@ -1,6 +1,6 @@
 %% secondPulseTime : 0-1 fraction of the simulation time at which the second input pulse is applied.
 %% new_params_map  : A hash map of variable name to value, used for the new parameter passing style.
-function out=PBexperimentModified(connect,visBool,lifMode,pA, jumpDistance, pulseLengthMulti, simulationTime, stimulusSwitch, backgroundNoiseBool, inputList, maxSpikeRate, secondPulseTime, initial_heading_index, stim_neuron_list, new_params_map)
+function out=PBexperimentModified(connect,visBool,lifMode,pA, jumpDistance, pulseLengthMulti, simulationTime, stimulusSwitch, backgroundNoiseBool, inputList, maxSpikeRate, secondPulseTime, initial_heading_index, stim_neuron_list, new_params_map, SimulationParamsStruct)
 
 P.pscWeights=20;
 
@@ -57,13 +57,31 @@ end
 
 experimentStartTime=0.5/P.dt;   %s
 
+if exist('SimulationParamsStruct', 'var')
+    if isfield(SimulationParamsStruct, 'Cmem')
+        P.Cmem = SimulationParamsStruct.Cmem; % Nominal membrane capacitance
+    end
+    if isfield(SimulationParamsStruct, 'Rmem')
+        P.Rmem = SimulationParamsStruct.Rmem;  % Nominal membrane resistence
+    end
+    if isfield(SimulationParamsStruct, 'mem_noise')
+        P.mem_noise = SimulationParamsStruct.mem_noise; % Type of membrane parameters noise
+    end
+    if isfield(SimulationParamsStruct, 'Csigma')
+        P.Csigma = SimulationParamsStruct.Csigma;     % Variance if the normally distributed noise to membrane parameters
+    end
+    if isfield(SimulationParamsStruct, 'Rsigma')
+        P.Rsigma = SimulationParamsStruct.Rsigma;     % Variance if the normally distributed noise to membrane parameters
+    end
+end
+
 % If stimulusSwitch vector of Bool values was given use it
 if exist('stimulusSwitch', 'var')
-    vec_length = 15;
+    vec_length = 16;
     if size(stimulusSwitch, 2) < vec_length
         stimulusSwitch(length(stimulusSwitch)+1:vec_length) = 0;
     end
-    [SweepBarBool,SweepBarBool2,BarsGoUpBool,DoubleSweepBool,TwinBarBool,ExtraInputBool,FatStripeBool,FlashingBarBool,OneSpikeBool,JumpBarBool,initBarBool,ImbalanceRightBool,selectedColumnsBool,useNewInputMapValues,vonMisesFixedBool] = feval(@(x) x{:}, num2cell(stimulusSwitch));
+    [SweepBarBool,SweepBarBool2,BarsGoUpBool,DoubleSweepBool,TwinBarBool,ExtraInputBool,FatStripeBool,FlashingBarBool,OneSpikeBool,JumpBarBool,initBarBool,ImbalanceRightBool,selectedColumnsBool,useNewInputMapValues,vonMisesFixedBool,vonMisesTrajectoryBool] = feval(@(x) x{:}, num2cell(stimulusSwitch));
 else % else use in file settings
     SweepBarBool    =1; %=1 for multidimensional analysis
     SweepBarBool2   =0;
@@ -82,6 +100,7 @@ else % else use in file settings
     selectedColumnsBool = 0; 
     useNewInputMapValues = 0; % Switch to using variable values provided in the map new_params_map. That was done because adding new arguments for new functionality ended up being messy.
     vonMisesFixedBool = 0; % Apply a von Misses dstributed stimulus (circular Gaussian)
+    vonMisesTrajectoryBool = 0; % Apply a moving von Misses dstributed stimulus (circular Gaussian)
 end
 
 P.inputDetails.SweepBarBool=SweepBarBool;
@@ -99,6 +118,7 @@ P.inputDetails.ImbalanceRightBool = ImbalanceRightBool;
 P.inputDetails.selectedColumnsBool = selectedColumnsBool;
 P.inputDetails.useNewInputMapValues = useNewInputMapValues; % Switch to using variable values provided in the map new_params_map. That was done because adding new arguments for new functionality ended up being messy.
 P.inputDetails.vonMisesFixedBool = vonMisesFixedBool;
+P.inputDetails.vonMisesTrajectoryBool = vonMisesTrajectoryBool;
 
 if ~exist('backgroundNoiseBool', 'var')
     backgroundNoiseBool = 1;
@@ -262,6 +282,45 @@ if vonMisesFixedBool==1
     end 
 end
 
+if vonMisesTrajectoryBool==1
+    map = new_params_map('vonMisesTrajectoryBool');
+    pulseStartTime = map('pulseStartTime');
+    pulseLength = map('pulseDuration');
+    %stim_neuron_list = map('stim_neuron_list'); % Nope
+    stim_neuron_center_idx_ts = map('stim_neuron_list');
+    maxSpikeRateLocal = map('maxSpikeRate');
+    maxSpikeRateFactorLocal = map('maxSpikeRateFactor');
+    kappa = map('kappa');
+    
+    stim_neuron_center_idx_ts_deg = (stim_neuron_center_idx_ts - 1) / halfCols * 360;
+    %kappa = pi*7/6; % This results to Gaussian with 91deg FWHM
+    sample_at_deg = [0:360/8:359];
+    sample_at_rads = circ_ang2rad(sample_at_deg);
+    [p alpha] = circ_vmpdf(sample_at_rads, circ_ang2rad(stim_neuron_center_idx_ts_deg), kappa);
+    % Normalise p to the range of 0 to 1 because it varies with kappa
+    p = (p - min(min(p))) * 1 / max(max(p - min(min(p))));
+    
+    % In the drosophila with 9th columns copy over the value of the 1st
+    % column
+    if halfCols == 9
+        p = [p; p(1, :)];
+    end
+    pulseStartTime=pulseStartTime/P.dt;
+    pulseLength=pulseLength/P.dt;
+    sweep=ones(1, round(pulseLength));
+    %sweep=1-(sweep-pulseLength/2).^2;
+    %sweep=1.5*(sweep-min(sweep))/(max(sweep)-min(sweep));
+    sweep = sweep * maxSpikeRateLocal * maxSpikeRateFactorLocal;
+
+    whereTemp=(pulseStartTime+1:pulseStartTime+pulseLength);
+    % Assign the same scaled sweep vector to all listed rows/neurons on both sides
+    for col_indx = 1:halfCols
+        stimulus1(whereTemp,col_indx)         =sweep.*p(col_indx,:); % Left side
+        stimulus1(whereTemp,col_indx+halfCols)=sweep.*p(col_indx,:); % Right side
+    end 
+end
+
+
 
 if SweepBarBool==1;
     for i=1:halfCols
@@ -365,6 +424,38 @@ switch lifMode
     case 2
         out=flyLI(P,Con);
         out.inputPSCs=[];
+    case 3 % My implementation of rate based simulation
+        out=flyLI2(P,Con,inputList,stimulus1);
+        out.inputPSCs=[];        
+    case 4 % My extension of spiking simulation with ability to modify individual neuron membrane properties
+        % P can optionally have the properties P.Cmem and P.Rmem be, instead of scalar values, 
+        % vectors of length equal to the number of neurons (side of connectivity matrix)
+        if ~isfield(P, 'Cmem')
+            P.Cmem = 2e-8; % Nominal membrane capacitance
+        end
+        if ~isfield(P, 'Rmem')
+            P.Rmem = 1e6;  % Nominal membrane resistence
+        end
+        if ~isfield(P, 'Csigma')
+            P.Csigma = 0;     % Variance of the normally distributed noise to membrane parameters
+        end
+        if ~isfield(P, 'Rsigma')
+            P.Rsigma = 0;     % Variance of the normally distributed noise to membrane parameters
+        end
+        % P.mem_noise = 'gaussian';
+        % Generate the vectors with the membrane properties of the neurons
+        if isfield(P, 'mem_noise')
+            if strcmp(P.mem_noise, 'gaussian')
+                numNeurons=size(Con,1);
+                P.Cmem = ones(1, numNeurons) * P.Cmem;
+                P.Cmem = P.Cmem + normrnd(0, P.Csigma, size(P.Cmem)) .* P.Cmem;
+                P.Cmem(P.Cmem<0) = 0; % Do not allow negative values
+                P.Rmem = ones(1, numNeurons) * P.Rmem;
+                P.Rmem = P.Rmem + normrnd(0, P.Rsigma, size(P.Rmem)) .* P.Rmem;
+                P.Rmem(P.Rmem<0) = 0; % Do not allow negative values
+            end
+        end
+        out=flyLIF2mod(P,Con,inputList,stimulus1,pA);
 end
 
 out.classMeans=classMeans;
@@ -375,6 +466,17 @@ blurWidth=120*(1e-3/out.P.dt);
 blurredImage=imfilter(double(Spikes),fspecial('gaussian',[1,blurWidth],blurWidth/5));
 blurredImage=blurredImage';
 out.blurredImage=blurredImage;
+
+% If using the rate based model we do not have spikes so it is as if there
+% are constantly spikes resulting to high smoothed value and saturation
+% for this reason use an alternative method. 
+if lifMode == 3
+    Vrectified = out.V;
+    Vrectified(out.V<0) = 0;
+    out.blurredImage = Vrectified;
+    %out.blurredImage = out.blurredImage / max(max(out.blurredImage)); % normalise to max 1
+    %out.blurredImage(out.blurredImage>0.7) = 0.7; % crop at max 0.7
+end
 
 %% My addition of measuring spike rates at the end of the simulation
 out.spikeRate = countSpikeRateAtEnd(Spikes, P.dt);
