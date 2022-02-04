@@ -11,9 +11,11 @@ The code in Exp_Recurrent_PB_EB/ is the code developed for the paper Pisokas, He
 
 Both directories and subdirectories must be added in Matlab path. 
 
+[ColorBrewer](https://uk.mathworks.com/matlabcentral/fileexchange/45208-colorbrewer-attractive-and-distinctive-colormaps) should be downloaded and included in the path. 
+
 Running the script plot_explore_bump_jump_with_P_EGs.mlx in Matlab2016b will reproduce the plots included in the paper (the code has been tested with Matlab2016b and Matlab2020a). 
 
-Running the script make_plots.Rmd using R will reproduce the plots of response time and heading change rate plots in the paper. 
+Running the script make_plots.Rmd using R will reproduce the plots of response time and heading change rate in the paper. 
 
 Running the script collect_stats_long_run.m will run the simulations and collect all the data used in the plots (this code has been tested with Matlab2016b). The script contains instructions and list of the ways it was invoked to procude each of the data sets. 
 
